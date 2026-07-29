@@ -1,0 +1,13 @@
+{
+  "origin_airports": ["JFK", "LGA", "EWR", "HPN", "SWF"],
+  "destination_airports": ["SEA", "PAE"],
+  "target_date": "2026-12-22",
+  "date_flex_days": 2,
+  "trip_type": "one-way",
+  "currency": "USD",
+  "passengers": 1,
+  "max_stops": 1,
+  "fare": "economy",
+  "initial_threshold": 550
+}
+
