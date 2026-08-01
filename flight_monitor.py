@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config.json"
@@ -43,11 +44,24 @@ def dates_around(target: str, flex_days: int) -> Iterable[str]:
         yield (center + timedelta(days=offset)).isoformat()
 
 
+def dates_between(start: str, end: str) -> Iterable[str]:
+    current = date.fromisoformat(start)
+    final = date.fromisoformat(end)
+    while current <= final:
+        yield current.isoformat()
+        current += timedelta(days=1)
+
+
 def search_deals(config: dict[str, Any]) -> list[Deal]:
     from fast_flights import FlightQuery, Passengers, create_query, get_flights
 
     deals: list[Deal] = []
-    for travel_date in dates_around(config["target_date"], config["date_flex_days"]):
+    travel_dates = (
+        dates_between(config["start_date"], config["end_date"])
+        if "start_date" in config
+        else dates_around(config["target_date"], config["date_flex_days"])
+    )
+    for travel_date in travel_dates:
         for origin in config["origin_airports"]:
             for destination in config["destination_airports"]:
                 query = create_query(
@@ -83,8 +97,10 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
     return deals
 
 
-def build_email(deal: Deal, old_threshold: int) -> EmailMessage:
-    recipient = required_env("ALERT_EMAIL")
+def build_email(
+    deal: Deal, old_threshold: int, recipient: str | None = None
+) -> EmailMessage:
+    recipient = recipient or required_env("ALERT_EMAIL")
     sender = os.getenv("SMTP_FROM", os.getenv("SMTP_USERNAME", ""))
     if not sender:
         raise RuntimeError("Set SMTP_FROM or SMTP_USERNAME")
@@ -135,6 +151,50 @@ def send_email(message: EmailMessage) -> None:
         server.send_message(message)
 
 
+def api_request(method: str = "GET", body: dict[str, Any] | None = None) -> Any:
+    data = json.dumps(body).encode() if body is not None else None
+    request = Request(
+        required_env("MONITOR_API_URL"),
+        data=data,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {required_env('MONITOR_API_KEY')}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urlopen(request, timeout=30) as response:
+        return json.loads(response.read())
+
+
+def run_remote(*, dry_run: bool = False) -> int:
+    for monitor in api_request():
+        config = {
+            "origin_airports": [monitor["departure"]],
+            "destination_airports": [monitor["arrival"]],
+            "start_date": monitor["startDate"],
+            "end_date": monitor["endDate"],
+            "trip_type": "one-way",
+            "currency": "USD",
+            "passengers": 1,
+            "max_stops": 1,
+            "fare": "economy",
+        }
+        deals = search_deals(config)
+        cheapest = min(deals, key=lambda item: item.price) if deals else None
+        if not cheapest or cheapest.price >= int(monitor["threshold"]):
+            print(f"Monitor {monitor['id']}: no alert")
+            continue
+        message = build_email(
+            cheapest, int(monitor["threshold"]), monitor["email"]
+        )
+        if dry_run:
+            print(message)
+        else:
+            send_email(message)
+            api_request("PATCH", {"id": monitor["id"], "threshold": cheapest.price})
+    return 0
+
+
 def run(*, dry_run: bool = False) -> int:
     config = load_json(CONFIG_PATH)
     state = load_json(STATE_PATH)
@@ -170,5 +230,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Monitor NYC-area to Seattle fares")
     parser.add_argument("--dry-run", action="store_true", help="print instead of email")
     args = parser.parse_args()
-    raise SystemExit(run(dry_run=args.dry_run))
-
+    runner = run_remote if os.getenv("MONITOR_API_URL") else run
+    raise SystemExit(runner(dry_run=args.dry_run))

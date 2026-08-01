@@ -1,0 +1,14 @@
+import { env } from "cloudflare:workers";
+import { NextRequest, NextResponse } from "next/server";
+
+type RuntimeEnv = { DB: D1Database; MONITOR_API_KEY?: string };
+const runtime = env as unknown as RuntimeEnv;
+const schema = `CREATE TABLE IF NOT EXISTS monitors (id INTEGER PRIMARY KEY AUTOINCREMENT, departure TEXT NOT NULL, arrival TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT NOT NULL, target_price INTEGER NOT NULL, threshold INTEGER NOT NULL, email TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`;
+async function ready() { await runtime.DB.prepare(schema).run(); }
+function row(r: Record<string, unknown>) { return { id:r.id, departure:r.departure, arrival:r.arrival, startDate:r.start_date, endDate:r.end_date, targetPrice:r.target_price, threshold:r.threshold, email:r.email, active:r.active }; }
+function automated(req: NextRequest) { const token=req.headers.get("authorization")?.replace(/^Bearer /,""); return Boolean(runtime.MONITOR_API_KEY && token===runtime.MONITOR_API_KEY); }
+function signedIn(req: NextRequest) { return Boolean(req.headers.get("oai-authenticated-user-email")); }
+export async function GET(req: NextRequest) { if (!signedIn(req) && !automated(req)) return NextResponse.json({error:"Unauthorized"},{status:401}); await ready(); const {results}=await runtime.DB.prepare("SELECT * FROM monitors WHERE active=1 ORDER BY updated_at DESC").all(); return NextResponse.json(results.map(r=>row(r as Record<string,unknown>))); }
+export async function POST(req: NextRequest) { if (!signedIn(req) && !automated(req)) return NextResponse.json({error:"Unauthorized"},{status:401}); await ready(); const b=await req.json(); if(!/^[A-Z]{3}$/.test(b.departure)||!/^[A-Z]{3}$/.test(b.arrival)||!/^\S+@\S+\.\S+$/.test(b.email)||b.startDate>b.endDate||b.targetPrice<1) return NextResponse.json({error:"Invalid monitor"},{status:400}); await runtime.DB.prepare("INSERT INTO monitors (departure,arrival,start_date,end_date,target_price,threshold,email,updated_at) VALUES (?,?,?,?,?,?,?,?)").bind(b.departure,b.arrival,b.startDate,b.endDate,b.targetPrice,b.targetPrice,b.email,new Date().toISOString()).run(); return NextResponse.json({ok:true},{status:201}); }
+export async function PATCH(req: NextRequest) { if (!automated(req)) return NextResponse.json({error:"Unauthorized"},{status:401}); await ready(); const b=await req.json(); await runtime.DB.prepare("UPDATE monitors SET threshold=?, updated_at=? WHERE id=? AND ? < threshold").bind(b.threshold,new Date().toISOString(),b.id,b.threshold).run(); return NextResponse.json({ok:true}); }
+export async function DELETE(req: NextRequest) { if (!signedIn(req)) return NextResponse.json({error:"Unauthorized"},{status:401}); await ready(); const id=Number(req.nextUrl.searchParams.get("id")); await runtime.DB.prepare("DELETE FROM monitors WHERE id=?").bind(id).run(); return NextResponse.json({ok:true}); }

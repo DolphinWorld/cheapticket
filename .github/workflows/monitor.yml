@@ -36,6 +36,8 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          MONITOR_API_URL: ${{ secrets.MONITOR_API_URL }}
+          MONITOR_API_KEY: ${{ secrets.MONITOR_API_KEY }}
         run: python flight_monitor.py
 
       - name: Save threshold and check status
@@ -49,4 +51,3 @@ jobs:
           git add state.json
           git commit -m "Update flight monitor state"
           git push
-

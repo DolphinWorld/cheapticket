@@ -20,6 +20,12 @@ class MonitorTests(unittest.TestCase):
             ],
         )
 
+    def test_dates_between(self):
+        self.assertEqual(
+            list(flight_monitor.dates_between("2026-12-20", "2026-12-22")),
+            ["2026-12-20", "2026-12-21", "2026-12-22"],
+        )
+
     def test_threshold_changes_only_after_email_succeeds(self):
         with tempfile.TemporaryDirectory() as directory:
             state_path = Path(directory) / "state.json"
@@ -84,4 +90,3 @@ class MonitorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
