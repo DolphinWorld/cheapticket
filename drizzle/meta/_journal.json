@@ -8,6 +8,13 @@
       "when": 1785597080707,
       "tag": "0000_swift_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785597729546,
+      "tag": "0001_nosy_tigra",
+      "breakpoints": true
     }
   ]
 }

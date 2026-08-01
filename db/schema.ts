@@ -9,6 +9,7 @@ export const monitors = sqliteTable("monitors", {
   targetPrice: integer("target_price").notNull(),
   threshold: integer("threshold").notNull(),
   email: text("email").notNull(),
+  ownerEmail: text("owner_email").notNull().default(""),
   active: integer("active").notNull().default(1),
   updatedAt: text("updated_at").notNull(),
 });

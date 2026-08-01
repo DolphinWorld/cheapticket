@@ -1,0 +1,27 @@
+form > button.cancel {
+  margin-top: 9px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  justify-content: center;
+  padding: 12px;
+}
+
+.watchFoot .actions {
+  display: flex;
+  gap: 10px;
+}
+
+.watchFoot .actions button {
+  border: 0;
+  background: none;
+  font: 500 10px "DM Mono";
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--ink);
+  padding: 4px;
+}
+
+.watchFoot .actions button:last-child {
+  color: #a44632;
+}
