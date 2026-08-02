@@ -36,6 +36,7 @@ class MonitorTests(unittest.TestCase):
             deal = flight_monitor.Deal(
                 price=499,
                 travel_date="2026-12-22",
+                departure_at="2026-12-22T10:00",
                 origin="JFK",
                 destination="SEA",
                 airlines=["Example Air"],
@@ -66,7 +67,7 @@ class MonitorTests(unittest.TestCase):
                 '"last_price": null, "last_error": null}'
             )
             deal = flight_monitor.Deal(
-                499, "2026-12-22", "JFK", "SEA", ["Example Air"], 0, "https://x"
+                499, "2026-12-22", "2026-12-22T10:00", "JFK", "SEA", ["Example Air"], 0, "https://x"
             )
             with (
                 patch.object(flight_monitor, "STATE_PATH", state_path),

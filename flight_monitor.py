@@ -21,6 +21,7 @@ STATE_PATH = ROOT / "state.json"
 class Deal:
     price: int
     travel_date: str
+    departure_at: str
     origin: str
     destination: str
     airlines: list[str]
@@ -70,6 +71,7 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                             date=travel_date,
                             from_airport=origin,
                             to_airport=destination,
+                            airlines=config.get("airlines"),
                         )
                     ],
                     seat=config["fare"],
@@ -83,10 +85,19 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                     segments = result.flights
                     if not segments:
                         continue
+                    departure = segments[0].departure
+                    departure_at = datetime(
+                        *departure.date, *departure.time
+                    ).isoformat(timespec="minutes")
+                    if config.get("start_at") and departure_at < config["start_at"]:
+                        continue
+                    if config.get("end_at") and departure_at > config["end_at"]:
+                        continue
                     deals.append(
                         Deal(
                             price=int(result.price),
                             travel_date=travel_date,
+                            departure_at=departure_at,
                             origin=segments[0].from_airport.code,
                             destination=segments[-1].to_airport.code,
                             airlines=list(result.airlines),
@@ -98,7 +109,10 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
 
 
 def build_email(
-    deal: Deal, old_threshold: int, recipient: str | None = None
+    deal: Deal,
+    old_threshold: int,
+    recipient: str | None = None,
+    watch_name: str = "All airlines",
 ) -> EmailMessage:
     recipient = recipient or required_env("ALERT_EMAIL")
     sender = os.getenv("SMTP_FROM") or os.getenv("SMTP_USERNAME", "")
@@ -109,14 +123,15 @@ def build_email(
     message["From"] = sender
     message["To"] = recipient
     message["Subject"] = (
-        f"Flight price alert: ${deal.price} {deal.origin} → {deal.destination}"
+        f"{watch_name} alert: ${deal.price} {deal.origin} → {deal.destination}"
     )
     airline_text = ", ".join(deal.airlines) or "Unknown airline"
     message.set_content(
         f"""A lower NYC-area → Seattle-area economy fare was found.
 
+Watch: {watch_name}
 Price: ${deal.price} (previous threshold: ${old_threshold})
-Date: {deal.travel_date}
+Departure: {deal.departure_at}
 Route: {deal.origin} → {deal.destination}
 Airline(s): {airline_text}
 Stops: {deal.stops}
@@ -169,30 +184,50 @@ def api_request(method: str = "GET", body: dict[str, Any] | None = None) -> Any:
 
 def run_remote(*, dry_run: bool = False) -> int:
     for monitor in api_request():
-        config = {
+        base_config = {
             "origin_airports": [monitor["departure"]],
             "destination_airports": [monitor["arrival"]],
             "start_date": monitor["startDate"],
             "end_date": monitor["endDate"],
+            "start_at": f"{monitor['startDate']}T{monitor['startTime']}",
+            "end_at": f"{monitor['endDate']}T{monitor['endTime']}",
             "trip_type": "one-way",
             "currency": "USD",
             "passengers": 1,
             "max_stops": 1,
             "fare": "economy",
         }
-        deals = search_deals(config)
-        cheapest = min(deals, key=lambda item: item.price) if deals else None
-        if not cheapest or cheapest.price >= int(monitor["threshold"]):
-            print(f"Monitor {monitor['id']}: no alert")
-            continue
-        message = build_email(
-            cheapest, int(monitor["threshold"]), monitor["email"]
-        )
-        if dry_run:
-            print(message)
-        else:
-            send_email(message)
-            api_request("PATCH", {"id": monitor["id"], "threshold": cheapest.price})
+        checks = [
+            ("all", "All airlines", int(monitor["threshold"]), base_config),
+        ]
+        if monitor.get("airline"):
+            checks.append((
+                "airline",
+                f"Preferred airline {monitor['airline']}",
+                int(monitor["airlineThreshold"]),
+                {**base_config, "airlines": [monitor["airline"]]},
+            ))
+        for threshold_type, watch_name, threshold, config in checks:
+            deals = search_deals(config)
+            cheapest = min(deals, key=lambda item: item.price) if deals else None
+            if not cheapest or cheapest.price >= threshold:
+                print(f"Monitor {monitor['id']} {threshold_type}: no alert")
+                continue
+            message = build_email(
+                cheapest, threshold, monitor["email"], watch_name
+            )
+            if dry_run:
+                print(message)
+            else:
+                send_email(message)
+                api_request(
+                    "PATCH",
+                    {
+                        "id": monitor["id"],
+                        "threshold": cheapest.price,
+                        "thresholdType": threshold_type,
+                    },
+                )
     return 0
 
 

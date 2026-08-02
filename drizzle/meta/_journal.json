@@ -22,6 +22,13 @@
       "when": 1785637709098,
       "tag": "0002_serious_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785678230418,
+      "tag": "0003_powerful_dreaming_celestial",
+      "breakpoints": true
     }
   ]
 }

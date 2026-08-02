@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import "./globals.css";
 import "./actions.css";
 import "./admin.css";
+import "./dual.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const h = await headers();
