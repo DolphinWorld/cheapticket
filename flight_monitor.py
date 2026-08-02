@@ -16,6 +16,14 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config.json"
 STATE_PATH = ROOT / "state.json"
 
+AIRPORT_NAMES = {
+    "JFK": "John F. Kennedy International",
+    "LGA": "LaGuardia",
+    "EWR": "Newark Liberty International",
+    "SEA": "Seattle-Tacoma International",
+    "PAE": "Seattle Paine Field",
+}
+
 
 @dataclass(frozen=True)
 class Deal:
@@ -27,6 +35,7 @@ class Deal:
     airlines: list[str]
     stops: int
     booking_url: str
+    return_at: str | None = None
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -57,23 +66,44 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
     from fast_flights import FlightQuery, Passengers, create_query, get_flights
 
     deals: list[Deal] = []
-    travel_dates = (
+    travel_dates = list(
         dates_between(config["start_date"], config["end_date"])
         if "start_date" in config
         else dates_around(config["target_date"], config["date_flex_days"])
     )
-    for travel_date in travel_dates:
+    date_pairs: list[tuple[str, str | None]] = [(item, None) for item in travel_dates]
+    if config["trip_type"] == "round-trip":
+        return_dates = list(
+            dates_between(config["return_start_date"], config["return_end_date"])
+        )
+        date_pairs = [
+            (outbound, returning)
+            for outbound in travel_dates
+            for returning in return_dates
+            if returning >= outbound
+        ]
+    for travel_date, return_date in date_pairs:
         for origin in config["origin_airports"]:
             for destination in config["destination_airports"]:
-                query = create_query(
-                    flights=[
+                flights = [
+                    FlightQuery(
+                        date=travel_date,
+                        from_airport=origin,
+                        to_airport=destination,
+                        airlines=config.get("airlines"),
+                    )
+                ]
+                if return_date:
+                    flights.append(
                         FlightQuery(
-                            date=travel_date,
-                            from_airport=origin,
-                            to_airport=destination,
+                            date=return_date,
+                            from_airport=destination,
+                            to_airport=origin,
                             airlines=config.get("airlines"),
                         )
-                    ],
+                    )
+                query = create_query(
+                    flights=flights,
                     seat=config["fare"],
                     trip=config["trip_type"],
                     passengers=Passengers(adults=config["passengers"]),
@@ -81,6 +111,37 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                     currency=config["currency"],
                     max_stops=config["max_stops"],
                 )
+                return_at_hint = None
+                if return_date:
+                    return_query = create_query(
+                        flights=[
+                            FlightQuery(
+                                date=return_date,
+                                from_airport=destination,
+                                to_airport=origin,
+                                airlines=config.get("airlines"),
+                            )
+                        ],
+                        seat=config["fare"],
+                        trip="one-way",
+                        passengers=Passengers(adults=config["passengers"]),
+                        language="en-US",
+                        currency=config["currency"],
+                        max_stops=config["max_stops"],
+                    )
+                    eligible_returns = []
+                    for return_offer in get_flights(return_query):
+                        if not return_offer.flights:
+                            continue
+                        returning = return_offer.flights[0].departure
+                        candidate = datetime(
+                            *returning.date, *returning.time
+                        ).isoformat(timespec="minutes")
+                        if config["return_start_at"] <= candidate <= config["return_end_at"]:
+                            eligible_returns.append(candidate)
+                    if not eligible_returns:
+                        continue
+                    return_at_hint = min(eligible_returns)
                 for result in get_flights(query):
                     segments = result.flights
                     if not segments:
@@ -93,6 +154,7 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                         continue
                     if config.get("end_at") and departure_at > config["end_at"]:
                         continue
+                    return_at = return_at_hint
                     deals.append(
                         Deal(
                             price=int(result.price),
@@ -103,6 +165,7 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                             airlines=list(result.airlines),
                             stops=max(0, len(segments) - 1),
                             booking_url=query.url(),
+                            return_at=return_at,
                         )
                     )
     return deals
@@ -127,12 +190,13 @@ def build_email(
     )
     airline_text = ", ".join(deal.airlines) or "Unknown airline"
     message.set_content(
-        f"""A lower NYC-area → Seattle-area economy fare was found.
+        f"""A lower economy fare was found.
 
 Watch: {watch_name}
 Price: ${deal.price} (previous threshold: ${old_threshold})
 Departure: {deal.departure_at}
-Route: {deal.origin} → {deal.destination}
+{f"Return window availability found from: {deal.return_at}" if deal.return_at else "Trip: One way"}
+Route: {deal.origin} ({AIRPORT_NAMES.get(deal.origin, "airport")}) → {deal.destination} ({AIRPORT_NAMES.get(deal.destination, "airport")})
 Airline(s): {airline_text}
 Stops: {deal.stops}
 
@@ -197,6 +261,16 @@ def run_remote(*, dry_run: bool = False) -> int:
             "max_stops": 1,
             "fare": "economy",
         }
+        if monitor.get("tripType") == "round-trip":
+            base_config.update(
+                {
+                    "trip_type": "round-trip",
+                    "return_start_date": monitor["returnStartDate"],
+                    "return_end_date": monitor["returnEndDate"],
+                    "return_start_at": f"{monitor['returnStartDate']}T{monitor['returnStartTime']}",
+                    "return_end_at": f"{monitor['returnEndDate']}T{monitor['returnEndTime']}",
+                }
+            )
         checks = [
             ("all", "All airlines", int(monitor["threshold"]), base_config),
         ]
