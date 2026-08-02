@@ -101,7 +101,7 @@ def build_email(
     deal: Deal, old_threshold: int, recipient: str | None = None
 ) -> EmailMessage:
     recipient = recipient or required_env("ALERT_EMAIL")
-    sender = os.getenv("SMTP_FROM", os.getenv("SMTP_USERNAME", ""))
+    sender = os.getenv("SMTP_FROM") or os.getenv("SMTP_USERNAME", "")
     if not sender:
         raise RuntimeError("Set SMTP_FROM or SMTP_USERNAME")
 
@@ -142,8 +142,8 @@ def required_env(name: str) -> str:
 
 
 def send_email(message: EmailMessage) -> None:
-    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    port = int(os.getenv("SMTP_PORT", "465"))
+    host = os.getenv("SMTP_HOST") or "smtp.gmail.com"
+    port = int(os.getenv("SMTP_PORT") or "465")
     username = required_env("SMTP_USERNAME")
     password = required_env("SMTP_PASSWORD")
     with smtplib.SMTP_SSL(host, port, context=ssl.create_default_context()) as server:
