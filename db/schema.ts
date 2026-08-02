@@ -13,3 +13,9 @@ export const monitors = sqliteTable("monitors", {
   active: integer("active").notNull().default(1),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const accessUsers = sqliteTable("access_users", {
+  email: text("email").primaryKey(),
+  role: text("role").notNull().default("user"),
+  createdAt: text("created_at").notNull(),
+});

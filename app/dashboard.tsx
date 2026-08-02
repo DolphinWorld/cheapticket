@@ -2,18 +2,19 @@
 import { FormEvent, useEffect, useState } from "react";
 
 type Monitor = { id: number; departure: string; arrival: string; startDate: string; endDate: string; targetPrice: number; threshold: number; email: string; active: number };
-const initial = { departure: "NYC", arrival: "SEA", startDate: "2026-12-20", endDate: "2026-12-24", targetPrice: "550", email: "jacksuyu@gmail.com" };
+type AccessUser = { email: string; role: string };
+const initialFor = (email: string) => ({ departure: "NYC", arrival: "SEA", startDate: "2026-12-20", endDate: "2026-12-24", targetPrice: "550", email });
 
-export default function Dashboard({ signedInEmail }: { signedInEmail: string }) {
-  const [form, setForm] = useState(initial); const [items, setItems] = useState<Monitor[]>([]); const [status, setStatus] = useState(""); const [editingId, setEditingId] = useState<number|null>(null);
+export default function Dashboard({ signedInEmail, isAdmin }: { signedInEmail: string; isAdmin: boolean }) {
+  const [form, setForm] = useState(initialFor(signedInEmail)); const [items, setItems] = useState<Monitor[]>([]); const [status, setStatus] = useState(""); const [editingId, setEditingId] = useState<number|null>(null);
   async function refresh() { const r = await fetch("/api/monitors"); if (r.ok) setItems(await r.json()); }
   useEffect(() => { refresh(); }, []);
-  async function submit(e: FormEvent) { e.preventDefault(); setStatus("Saving…"); const r = await fetch("/api/monitors", { method: editingId ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...form, id: editingId, targetPrice: Number(form.targetPrice) }) }); setStatus(r.ok ? (editingId ? "Watch updated" : "Monitor active") : "Could not save"); if (r.ok) { setEditingId(null); setForm(initial); refresh(); } }
+  async function submit(e: FormEvent) { e.preventDefault(); setStatus("Saving…"); const r = await fetch("/api/monitors", { method: editingId ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...form, id: editingId, targetPrice: Number(form.targetPrice) }) }); setStatus(r.ok ? (editingId ? "Watch updated" : "Monitor active") : "Could not save"); if (r.ok) { setEditingId(null); setForm(initialFor(signedInEmail)); refresh(); } }
   function edit(m: Monitor) { setEditingId(m.id); setForm({departure:m.departure,arrival:m.arrival,startDate:m.startDate,endDate:m.endDate,targetPrice:String(m.targetPrice),email:m.email}); setStatus("Editing watch"); document.querySelector(".workspace")?.scrollIntoView({behavior:"smooth"}); }
-  function cancelEdit() { setEditingId(null); setForm(initial); setStatus(""); }
+  function cancelEdit() { setEditingId(null); setForm(initialFor(signedInEmail)); setStatus(""); }
   async function remove(id: number) { await fetch(`/api/monitors?id=${id}`, { method: "DELETE" }); refresh(); }
   return <main>
-    <header><a className="brand" href="#">farewatch<span>°</span></a><div className="user"><i />{signedInEmail}</div></header>
+    <header><a className="brand" href="#">farewatch<span>°</span></a><div className="user"><i />{signedInEmail}{isAdmin&&<a href="#admin">Admin</a>}<a href="/signout-with-chatgpt?return_to=%2F">Sign out</a></div></header>
     <section className="hero"><div><p className="eyebrow">FLIGHT PRICE MONITOR</p><h1>Tell us where.<br/><em>We’ll watch the fare.</em></h1><p className="lede">Set your route, travel window, and target. We check every two hours and email only when the price drops below your threshold.</p></div><div className="orb"><span>Every</span><strong>2h</strong><small>quietly checking</small></div></section>
     <section className="workspace">
       <form onSubmit={submit}><div className="formHead"><span>01</span><div><h2>{editingId ? "Update your watch" : "Create a monitor"}</h2><p>Nearby airports are included for metro codes such as NYC and SEA.</p></div></div>
@@ -26,6 +27,16 @@ export default function Dashboard({ signedInEmail }: { signedInEmail: string }) 
         <div className="note"><span>i</span><p><b>Main Cabin note</b>The free fare source reports economy pricing. Always confirm the final booking page says Main or Main Cabin—not Basic Economy.</p></div>
       </aside>
     </section>
+    {isAdmin&&<AdminPanel />}
     <footer><span>Powered by a patient little robot.</span><span>Prices change. Thresholds only move down.</span></footer>
   </main>;
+}
+
+function AdminPanel() {
+  const [users,setUsers]=useState<AccessUser[]>([]); const [email,setEmail]=useState(""); const [message,setMessage]=useState("");
+  async function refresh(){const r=await fetch("/api/admin/users");if(r.ok)setUsers(await r.json())}
+  useEffect(()=>{refresh()},[]);
+  async function add(e:FormEvent){e.preventDefault();setMessage("Adding…");const r=await fetch("/api/admin/users",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email})});setMessage(r.ok?"Access granted":"Could not add email");if(r.ok){setEmail("");refresh()}}
+  async function remove(userEmail:string){const r=await fetch(`/api/admin/users?email=${encodeURIComponent(userEmail)}`,{method:"DELETE"});if(r.ok)refresh();else setMessage("Could not remove email")}
+  return <section className="adminPanel" id="admin"><div className="asideHead"><span>03</span><div><h2>Access administration</h2><p>Add or remove people who can sign in to Farewatch.</p></div></div><form onSubmit={add}><label>Approved email<input type="email" required placeholder="person@example.com" value={email} onChange={e=>setEmail(e.target.value)}/></label><button type="submit">Grant access <span>↗</span></button></form><p className="status">{message}</p><div className="userList">{users.map(u=><div key={u.email}><span><b>{u.email}</b><small>{u.role}</small></span>{u.role!=="admin"&&<button onClick={()=>remove(u.email)}>Remove</button>}</div>)}</div></section>;
 }

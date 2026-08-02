@@ -1,0 +1,16 @@
+.user a { color: var(--ink); text-decoration: none; border-left: 1px solid var(--line); padding-left: 10px; }
+.adminPanel { background: var(--paper); border: 1px solid var(--line); box-shadow: 9px 11px 0 #d6d0c0; margin: 0 0 55px; padding: 42px; }
+.adminPanel form { display: grid; grid-template-columns: 1fr 220px; gap: 16px; align-items: end; max-width: 760px; }
+.adminPanel form > button { margin: 0; height: 54px; }
+.userList { margin-top: 24px; display: grid; max-width: 760px; }
+.userList > div { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-top: 1px solid var(--line); }
+.userList span { display: flex; gap: 12px; align-items: center; }
+.userList small { font: 500 9px "DM Mono"; text-transform: uppercase; background: var(--mint); padding: 4px 7px; }
+.userList button { border: 0; background: none; color: #a44632; cursor: pointer; font: 500 10px "DM Mono"; text-transform: uppercase; }
+.gate { min-height: 100vh; display: grid; place-items: center; padding: 30px; }
+.gate section { max-width: 660px; background: var(--paper); border: 1px solid var(--line); padding: 60px; box-shadow: 12px 14px 0 #d6d0c0; }
+.gate .eyebrow { margin-top: 70px; }
+.gate h1 { font-size: clamp(42px, 7vw, 72px); line-height: .95; letter-spacing: -4px; margin: 0 0 25px; }
+.gate p { color: #5f6e65; line-height: 1.7; }
+.gateButton { display: inline-block; margin-top: 25px; padding: 16px 20px; background: var(--ink); color: white; text-decoration: none; }
+@media(max-width:700px){.adminPanel{padding:28px}.adminPanel form{grid-template-columns:1fr}.userList span{align-items:flex-start;flex-direction:column}.gate section{padding:35px}}
