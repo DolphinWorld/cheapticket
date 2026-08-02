@@ -160,6 +160,7 @@ def api_request(method: str = "GET", body: dict[str, Any] | None = None) -> Any:
         headers={
             "Authorization": f"Bearer {required_env('MONITOR_API_KEY')}",
             "Content-Type": "application/json",
+            "User-Agent": "Farewatch/1.0 (+https://github.com/DolphinWorld/cheapticket)",
         },
     )
     with urlopen(request, timeout=30) as response:
