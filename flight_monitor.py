@@ -62,6 +62,17 @@ def dates_between(start: str, end: str) -> Iterable[str]:
         current += timedelta(days=1)
 
 
+def flight_datetime(value: Any) -> str | None:
+    """Return an ISO timestamp, or None when a provider result is incomplete."""
+    try:
+        parts = (*value.date, *value.time)
+        if any(part is None for part in parts):
+            return None
+        return datetime(*parts).isoformat(timespec="minutes")
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def search_deals(config: dict[str, Any]) -> list[Deal]:
     from fast_flights import FlightQuery, Passengers, create_query, get_flights
 
@@ -134,9 +145,9 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                         if not return_offer.flights:
                             continue
                         returning = return_offer.flights[0].departure
-                        candidate = datetime(
-                            *returning.date, *returning.time
-                        ).isoformat(timespec="minutes")
+                        candidate = flight_datetime(returning)
+                        if candidate is None:
+                            continue
                         if config["return_start_at"] <= candidate <= config["return_end_at"]:
                             eligible_returns.append(candidate)
                     if not eligible_returns:
@@ -147,9 +158,9 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                     if not segments:
                         continue
                     departure = segments[0].departure
-                    departure_at = datetime(
-                        *departure.date, *departure.time
-                    ).isoformat(timespec="minutes")
+                    departure_at = flight_datetime(departure)
+                    if departure_at is None:
+                        continue
                     if config.get("start_at") and departure_at < config["start_at"]:
                         continue
                     if config.get("end_at") and departure_at > config["end_at"]:

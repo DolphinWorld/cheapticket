@@ -7,6 +7,12 @@ from unittest.mock import patch
 import flight_monitor
 
 
+class ProviderDate:
+    def __init__(self, date_parts, time_parts):
+        self.date = date_parts
+        self.time = time_parts
+
+
 class MonitorTests(unittest.TestCase):
     def test_dates_around(self):
         self.assertEqual(
@@ -24,6 +30,21 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(
             list(flight_monitor.dates_between("2026-12-20", "2026-12-22")),
             ["2026-12-20", "2026-12-21", "2026-12-22"],
+        )
+
+    def test_flight_datetime_skips_incomplete_provider_timestamp(self):
+        self.assertIsNone(
+            flight_monitor.flight_datetime(
+                ProviderDate((2026, 12, 29), (None, 30))
+            )
+        )
+
+    def test_flight_datetime_formats_valid_provider_timestamp(self):
+        self.assertEqual(
+            flight_monitor.flight_datetime(
+                ProviderDate((2026, 12, 29), (6, 30))
+            ),
+            "2026-12-29T06:30",
         )
 
     def test_threshold_changes_only_after_email_succeeds(self):
