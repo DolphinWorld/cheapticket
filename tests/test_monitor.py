@@ -47,6 +47,14 @@ class MonitorTests(unittest.TestCase):
             "2026-12-29T06:30",
         )
 
+    def test_no_flights_provider_response_becomes_empty_result(self):
+        from fast_flights.exceptions import FlightsNotFound
+
+        def no_flights(_query):
+            raise FlightsNotFound("no flights found")
+
+        self.assertEqual(flight_monitor.flights_or_empty(no_flights, object()), [])
+
     def test_threshold_changes_only_after_email_succeeds(self):
         with tempfile.TemporaryDirectory() as directory:
             state_path = Path(directory) / "state.json"

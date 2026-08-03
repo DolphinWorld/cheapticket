@@ -73,6 +73,16 @@ def flight_datetime(value: Any) -> str | None:
         return None
 
 
+def flights_or_empty(fetcher: Any, query: Any) -> list[Any]:
+    """Treat the provider's normal 'no flights' response as an empty result."""
+    from fast_flights.exceptions import FlightsNotFound
+
+    try:
+        return list(fetcher(query))
+    except FlightsNotFound:
+        return []
+
+
 def search_deals(config: dict[str, Any]) -> list[Deal]:
     from fast_flights import FlightQuery, Passengers, create_query, get_flights
 
@@ -141,7 +151,7 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                         max_stops=config["max_stops"],
                     )
                     eligible_returns = []
-                    for return_offer in get_flights(return_query):
+                    for return_offer in flights_or_empty(get_flights, return_query):
                         if not return_offer.flights:
                             continue
                         returning = return_offer.flights[0].departure
@@ -153,7 +163,7 @@ def search_deals(config: dict[str, Any]) -> list[Deal]:
                     if not eligible_returns:
                         continue
                     return_at_hint = min(eligible_returns)
-                for result in get_flights(query):
+                for result in flights_or_empty(get_flights, query):
                     segments = result.flights
                     if not segments:
                         continue
