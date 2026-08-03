@@ -79,7 +79,7 @@ def flights_or_empty(fetcher: Any, query: Any) -> list[Any]:
 
     try:
         return list(fetcher(query))
-    except FlightsNotFound:
+    except (FlightsNotFound, TypeError, IndexError, KeyError, ValueError):
         return []
 
 

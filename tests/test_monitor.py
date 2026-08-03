@@ -55,6 +55,14 @@ class MonitorTests(unittest.TestCase):
 
         self.assertEqual(flight_monitor.flights_or_empty(no_flights, object()), [])
 
+    def test_malformed_provider_payload_becomes_empty_result(self):
+        def malformed_payload(_query):
+            raise TypeError("'NoneType' object is not subscriptable")
+
+        self.assertEqual(
+            flight_monitor.flights_or_empty(malformed_payload, object()), []
+        )
+
     def test_threshold_changes_only_after_email_succeeds(self):
         with tempfile.TemporaryDirectory() as directory:
             state_path = Path(directory) / "state.json"
